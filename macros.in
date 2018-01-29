@@ -819,6 +819,8 @@ package or when debugging this package.\
   export PKG_CONFIG_PATH\
   CONFIG_SITE=${CONFIG_SITE:-NONE}\
   export CONFIG_SITE\
+  PYTHON_DISALLOW_AMBIGUOUS_VERSION=warn\
+  export PYTHON_DISALLOW_AMBIGUOUS_VERSION\
   \
   %{verbose:set -x}%{!verbose:exec > /dev/null}\
   umask 022\

@@ -368,6 +368,7 @@ typedef enum rpmTag_e {
     RPMTAG_FILESIGNATURELENGTH  = 5091, /* i */
     RPMTAG_PAYLOADDIGEST	= 5092, /* s[] */
     RPMTAG_PAYLOADDIGESTALGO	= 5093, /* i */
+    RPMTAG_MODULARITYLABEL	= 5096, /* s */
 
     RPMTAG_FIRSTFREE_TAG	/*!< internal */
 } rpmTag;

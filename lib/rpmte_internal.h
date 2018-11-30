@@ -86,6 +86,12 @@ int rpmteHaveTransScript(rpmte te, rpmTagVal tag);
 /* XXX should be internal too but build code needs for now... */
 rpmfs rpmteGetFileStates(rpmte te);
 
+RPM_GNUC_INTERNAL
+void rpmteSetVerified(rpmte te, int verified);
+
+RPM_GNUC_INTERNAL
+int rpmteGetVerified(rpmte te);
+
 /** \ingroup rpmte
  * Retrieve size in bytes of package header.
  * @param te		transaction element

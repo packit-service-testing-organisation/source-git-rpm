@@ -51,6 +51,7 @@ librpm_la_LIBADD = \
 	@WITH_POPT_LIB@ \
 	@WITH_CAP_LIB@ \
 	@WITH_ACL_LIB@ \
+	@WITH_AUDIT_LIB@ \
 	@LIBINTL@
 
 if WITH_LUA

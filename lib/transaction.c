@@ -7,6 +7,10 @@
 #include <inttypes.h>
 #include <libgen.h>
 
+#if WITH_AUDIT
+#include <libaudit.h>
+#endif
+
 #include <rpm/rpmlib.h>		/* rpmMachineScore, rpmReadPackageFile */
 #include <rpm/rpmmacro.h>	/* XXX for rpmExpand */
 #include <rpm/rpmlog.h>
@@ -1195,12 +1199,17 @@ static rpm_loff_t countPkgs(rpmts ts, rpmElementTypes types)
 
 struct vfydata_s {
     char *msg;
+    int signature;
     int vfylevel;
 };
 
 static int vfyCb(struct rpmsinfo_s *sinfo, void *cbdata)
 {
     struct vfydata_s *vd = cbdata;
+
+    if (sinfo->type == RPMSIG_SIGNATURE_TYPE && sinfo->rc == RPMRC_OK)
+	vd->signature = RPMRC_OK;
+
     switch (sinfo->rc) {
     case RPMRC_OK:
 	break;
@@ -1243,6 +1252,7 @@ static int verifyPackageFiles(rpmts ts, rpm_loff_t total)
 	struct rpmvs_s *vs = rpmvsCreate(vfylevel, vsflags, keyring);
 	struct vfydata_s vd = {
 	    .msg = NULL,
+	    .signature = RPMRC_NOTFOUND,
 	    .vfylevel = vfylevel,
 	};
 	rpmRC prc = RPMRC_FAIL;
@@ -1256,6 +1266,9 @@ static int verifyPackageFiles(rpmts ts, rpm_loff_t total)
 
 	if (prc == RPMRC_OK)
 	    prc = rpmvsVerify(vs, RPMSIG_VERIFIABLE_TYPE, vfyCb, &vd);
+
+	/* Record verify result, signatures only for now */
+	rpmteSetVerified(p, vd.signature == RPMRC_OK);
 
 	if (prc)
 	    rpmteAddProblem(p, RPMPROB_VERIFY, NULL, vd.msg, 0);
@@ -1621,6 +1634,95 @@ rpmRC runScript(rpmts ts, rpmte te, Header h, ARGV_const_t prefixes,
     return rc;
 }
 
+#if WITH_AUDIT
+struct teop {
+    rpmte te;
+    const char *op;
+};
+
+/*
+ * Figure out the actual operations:
+ * Install and remove are straightforward. Updates need to discovered 
+ * via their erasure element: locate the updating element, adjust it's
+ * op to update and silence the erasure part. Obsoletion is handled as
+ * as install + remove, which it technically is.
+ */
+static void getAuditOps(rpmts ts, struct teop *ops, int nelem)
+{
+    rpmtsi pi = rpmtsiInit(ts);
+    rpmte p;
+    int i = 0;
+    while ((p = rpmtsiNext(pi, 0)) != NULL) {
+	const char *op = NULL;
+	if (rpmteType(p) == TR_ADDED) {
+	    op = "install";
+	} else {
+	    op = "remove";
+	    rpmte d = rpmteDependsOn(p);
+	    /* Fixup op on updating elements, silence the cleanup stage */
+	    if (d != NULL && rstreq(rpmteN(d), rpmteN(p))) {
+		/* Linear lookup, but we're only dealing with a few thousand */
+		for (int x = 0; x < i; x++) {
+		    if (ops[x].te == d) {
+			ops[x].op = "update";
+			op = NULL;
+			break;
+		    }
+		}
+	    }
+	}
+	ops[i].te = p;
+	ops[i].op = op;
+	i++;
+    }
+    rpmtsiFree(pi);
+}
+
+/*
+ * If enabled, log audit events for the operations in this transaction.
+ * In the event values, 1 means true/success and 0 false/failure. Shockingly.
+ */
+static void rpmtsAudit(rpmts ts)
+{
+    int auditFd = audit_open();
+    if (auditFd < 0)
+	return;
+
+    int nelem = rpmtsNElements(ts);
+    struct teop *ops = xcalloc(nelem, sizeof(*ops));
+    char *dir = audit_encode_nv_string("root_dir", rpmtsRootDir(ts), 0);
+    int enforce = (rpmtsVfyLevel(ts) & RPMSIG_SIGNATURE_TYPE) != 0;
+
+    getAuditOps(ts, ops, nelem);
+
+    for (int i = 0; i < nelem; i++) {
+	const char *op = ops[i].op;
+	if (op) {
+	    rpmte p = ops[i].te;
+	    char *nevra = audit_encode_nv_string("sw", rpmteNEVRA(p), 0);
+	    char eventTxt[256];
+	    int verified = rpmteGetVerified(p);
+	    int result = (rpmteFailed(p) == 0);
+
+	    snprintf(eventTxt, sizeof(eventTxt),
+		    "op=%s %s sw_type=rpm key_enforce=%u gpg_res=%u %s",
+		    op, nevra, enforce, verified, dir);
+	    audit_log_user_comm_message(auditFd, AUDIT_SOFTWARE_UPDATE,
+				    eventTxt, NULL, NULL, NULL, NULL, result);
+	    free(nevra);
+	}
+    }
+
+    free(dir);
+    free(ops);
+    audit_close(auditFd);
+}
+#else
+static void rpmtsAudit(rpmts ts)
+{
+}
+#endif
+
 int rpmtsRun(rpmts ts, rpmps okProbs, rpmprobFilterFlags ignoreSet)
 {
     int rc = -1; /* assume failure */
@@ -1734,6 +1836,8 @@ exit:
 	rpmpluginsCallTsmPost(rpmtsPlugins(ts), ts, rc);
 
     /* Finish up... */
+    if (!(rpmtsFlags(ts) & (RPMTRANS_FLAG_TEST|RPMTRANS_FLAG_BUILD_PROBS)))
+	rpmtsAudit(ts);
     (void) umask(oldmask);
     (void) rpmtsFinish(ts);
     rpmpsFree(tsprobs);

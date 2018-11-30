@@ -312,6 +312,27 @@ fi
 AC_SUBST(WITH_BEECRYPT_LIB)
 AC_SUBST(WITH_BEECRYPT_INCLUDE)
 
+
+#=================
+# Check for audit library.
+AC_ARG_WITH(audit,
+AS_HELP_STRING([--with-audit],[log results using Linux Audit]),
+with_audit=$withval,
+with_audit=auto)
+
+WITH_AUDIT_LIB=
+AS_IF([test "x$with_audit" != xno],[
+    AC_SEARCH_LIBS([audit_open],[audit],[
+    WITH_AUDIT_LIB="$ac_res"
+    AC_DEFINE(WITH_AUDIT, 1, [libaudit support])
+    ],
+       [if test "x$with_audit" != xauto; then
+		AC_MSG_ERROR([missing audit library])
+	fi
+    ])
+])
+AC_SUBST(WITH_AUDIT_LIB)
+
 #=================
 # Check for OpenSSL library.
 # We need evp.h from OpenSSL.

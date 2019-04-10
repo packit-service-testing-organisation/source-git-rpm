@@ -61,6 +61,9 @@ except ImportError:
 # backwards compatibility + give the same class both ways
 ts = TransactionSet
 
+def _fakedecode(self, encoding='utf-8', errors='strict'):
+    warnings.warn("decode() called on unicode string, see https://bugzilla.redhat.com/show_bug.cgi?id=1693751", UnicodeWarning, stacklevel=2)
+    return self
 
 def headerLoad(*args, **kwds):
     """DEPRECATED! Use rpm.hdr() instead."""

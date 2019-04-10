@@ -28,6 +28,7 @@
  */
 
 PyObject * pyrpmError;
+PyObject * fakedecode = NULL;
 
 static PyObject * archScore(PyObject * self, PyObject * arg)
 {

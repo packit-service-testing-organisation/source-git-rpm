@@ -68,7 +68,7 @@
 
 %__arch_install_post   @ARCH_INSTALL_POST@
 %_python_bytecompile_errors_terminate_build 0
-%_python_bytecompile_extra   1
+%_python_bytecompile_extra   0
 
 # Standard brp-macro naming:
 # convert all '-' in basename to '_', add two leading underscores.

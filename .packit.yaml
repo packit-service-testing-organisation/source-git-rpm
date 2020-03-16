@@ -1,0 +1,2 @@
+specfile_path: centos-packaging/SPECS/rpm.spec
+upstream_ref: c8s-sg-start

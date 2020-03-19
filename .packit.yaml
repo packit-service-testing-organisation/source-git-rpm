@@ -1,2 +1,13 @@
 specfile_path: centos-packaging/SPECS/rpm.spec
 upstream_ref: c8s-sg-start
+jobs:
+  - job: copr_build
+    trigger: pull_request
+    metadata:
+      targets:
+        - centos-stream-x86_64
+  - job: tests
+    trigger: pull_request
+    metadata:
+      targets:
+        - centos-stream-x86_64
